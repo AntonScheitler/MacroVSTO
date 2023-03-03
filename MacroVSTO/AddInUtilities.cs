@@ -32,6 +32,8 @@ namespace MacroVSTO
 
         Dictionary<string, string> textToField = new Dictionary<string, string>();
 
+        string token = "Bearer MTU1MzM2MDgwNDY4OlNTdknPOqk2+rbeihN/MX42vFfr";
+
         HttpClient client = new HttpClient()
         {
             BaseAddress = new Uri("http://localhost:8080/rest/"),
@@ -106,7 +108,7 @@ namespace MacroVSTO
                 Dictionary<string, int> testExecDictionary = new Dictionary<string, int>();
                 parameters["testExecKey"] = key;
                 string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
-                client.DefaultRequestHeaders.Add("Authorization", "Bearer MzE5MzM5OTcxMzYwOtThs7BNUYzG2JCRqFkFpiisVmes");
+                client.DefaultRequestHeaders.Add("Authorization", token);
                 var task = client.GetStringAsync(uri);
                 String jsonString = task.GetAwaiter().GetResult();
                 client.DefaultRequestHeaders.Remove("Authorization");
@@ -157,7 +159,7 @@ namespace MacroVSTO
 
             parameters["testExecKey"] = key;
             string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
-            client.DefaultRequestHeaders.Add("Authorization", "Bearer MzE5MzM5OTcxMzYwOtThs7BNUYzG2JCRqFkFpiisVmes");
+            client.DefaultRequestHeaders.Add("Authorization", token);
             var task = client.GetStringAsync(uri);
             String jsonString = task.GetAwaiter().GetResult();
             client.DefaultRequestHeaders.Remove("Authorization");
@@ -190,8 +192,8 @@ namespace MacroVSTO
             newTask.Text20 = testExecKey;
 
 
-            newTask.Text10 = test["testIssueFields"][textToField["text10"]].ToString();
-            newTask.Text11 = test["testIssueFields"][textToField["text11"]].ToString();
+            //newTask.Text10 = test["testIssueFields"][textToField["text10"]].ToString();
+            //newTask.Text11 = test["testIssueFields"][textToField["text11"]].ToString();
 
             if (test["assignee"] == null)
                 {
@@ -222,7 +224,7 @@ namespace MacroVSTO
         {
             try
             {
-                client.DefaultRequestHeaders.Add("Authorization", "Bearer MzE5MzM5OTcxMzYwOtThs7BNUYzG2JCRqFkFpiisVmes");
+                client.DefaultRequestHeaders.Add("Authorization", token);
                 var task = client.GetStringAsync("api/2/search?jql=issueType='Test Execution'");
                 String testExecutionsString = task.GetAwaiter().GetResult();
                 client.DefaultRequestHeaders.Remove("Authorization");
