@@ -28,11 +28,10 @@ namespace MacroVSTO
     public class AddInUtilities : IAddInUtilities
     {
         
-        Dictionary<string, Dictionary<string, int>> tests = new Dictionary<string, Dictionary<string, int>>();
-
+        // this is a dictionary containing the mapping from the text field of a task to the desired custom field id
         Dictionary<string, string> textToField = new Dictionary<string, string>();
 
-        string token = "Bearer MTU1MzM2MDgwNDY4OlNTdknPOqk2+rbeihN/MX42vFfr";
+        string token = "Bearer OTY3MDY3MzE3OTQ1OghfelOUY/pXavz/Mfos0VSIZe5f";
 
         HttpClient client = new HttpClient()
         {
@@ -47,7 +46,8 @@ namespace MacroVSTO
 
         MSProject.Application application = Globals.ThisAddIn.Application;
 
-        public void scanProject()
+        // this method goes through every task in the project and updates the tests directory accordingly
+        public Dictionary<string, Dictionary<string, int>> scanProject()
         {
             
             Dictionary<string, Dictionary<string, int>> content = new Dictionary<string, Dictionary<string, int>>();
@@ -68,9 +68,11 @@ namespace MacroVSTO
                     content[task.Text20][task.Text19] = content[task.Text20][task.Text19] + 1;
                 }
             }
-            tests = content;
+            return content;
         }
 
+        // in order to get the mapping from text field to custom field, all possible custom fields and their corresponding id are stored int plaintofield.json
+        // using the texttoplain.json file, the mapping from text field to custom field id can be created
         public void WriteToTextToPlain(string text10In, string text11In)
         {
             string text10 = text10In.ToLower().Trim().Replace(" ", "");
@@ -83,6 +85,9 @@ namespace MacroVSTO
             File.WriteAllText("C:\\Users\\anton.scheitler\\source\\repos\\MacroVSTO\\MacroVSTO\\texttoplain.json", jsonString);
         }
 
+        // this method creates the actual mapping from text fields to custom field ids
+        // it also adjusts the parameters of the http request, to get the necessary custom fields
+        // as such, this method has to be called before each http request
         public void updateTextToField()
         {
             string plainToFieldString = File.ReadAllText("C:\\Users\\anton.scheitler\\source\\repos\\MacroVSTO\\MacroVSTO\\plaintofield.json");
@@ -90,22 +95,26 @@ namespace MacroVSTO
             var plainToField = JsonConvert.DeserializeObject<Dictionary<string, string>>(plainToFieldString);
             var textToPlain = JsonConvert.DeserializeObject<Dictionary<string, string>>(textToPlainString);
 
+            parameters["includeTestFields"] = "customfield_10128,customfield_10129,summary";
+            textToField = new Dictionary<string, string>();
+
             foreach (var text in textToPlain)
             {
                 if (text.Value != "")
                 {
-                    textToField.Add(text.Key, plainToField[text.Value]);                
+                    textToField.Add(text.Key, plainToField[text.Value]);
+                    parameters["includeTestFields"] += "," + plainToField[text.Value];
                 }
             }
         }
 
+        // imports a single test execution
         public async void ImportTestExecution(String key)
         {
             //try
             //{
                 key = key.ToUpper();
-                scanProject();
-                Dictionary<string, int> testExecDictionary = new Dictionary<string, int>();
+                updateTextToField();
                 parameters["testExecKey"] = key;
                 string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
                 client.DefaultRequestHeaders.Add("Authorization", token);
@@ -113,24 +122,11 @@ namespace MacroVSTO
                 String jsonString = task.GetAwaiter().GetResult();
                 client.DefaultRequestHeaders.Remove("Authorization");
                 var jsonArray = JArray.Parse(jsonString);
-                if (!tests.ContainsKey(key))
-                {
-                    tests.Add(key, testExecDictionary);
-                }
 
                 foreach (var test in jsonArray)
                 {
-                    if (!testExecDictionary.ContainsKey(test["testKey"].ToString()))
-                    {
-                        testExecDictionary[test["testKey"].ToString()] = 1;
-                    }
-                    else
-                    {
-                        testExecDictionary[test["testKey"].ToString()] = testExecDictionary[test["testKey"].ToString()] + 1;
-                    }
-                    AddTest(test, key);
+                    AddTest(test, key); // this method call adds the actual test to the project, all the other stuff can probably be refactored away (and should be)
                 }
-                tests[key] = testExecDictionary;
         //}
         //    catch
         //    {
@@ -140,6 +136,9 @@ namespace MacroVSTO
 
 }
 
+        // this method fetches data on a test execution and compares it to the existing representation of that test execution in the project
+        // if they don't match, the extra tests are added to the project
+        // however, tests cannot be removed from this
         public void ReimportTestExecution(String key)
         {
             application.SelectRow(1, false);
@@ -148,14 +147,15 @@ namespace MacroVSTO
                 return;
             }
             key = key.ToUpper();
-            scanProject();
+            Dictionary<string, Dictionary<string, int>> tests = scanProject();
+            updateTextToField();
             if (!tests.ContainsKey(key))
             {
                 MessageBox.Show("Test Execution has not been imported\nThus it cannot be reimported");
                 return;
             }
 
-            Dictionary<string, int> testExecCopy = tests[key].ToDictionary(entry => entry.Key, entry => entry.Value);
+            Dictionary<string, int> testExecCopy = tests[key];
 
             parameters["testExecKey"] = key;
             string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
@@ -168,12 +168,10 @@ namespace MacroVSTO
             {
                 if (!testExecCopy.ContainsKey(test["testKey"].ToString()))
                 {
-                    tests[key][test["testKey"].ToString()] = 1;
                     testExecCopy[test["testKey"].ToString()] = 0;
                     AddTest(test, key);
                 } else if (testExecCopy[test["testKey"].ToString()] == 0)
                 {
-                    tests[key][test["testKey"].ToString()] = tests[key][test["testKey"].ToString()] + 1;
                     AddTest(test, key);
                 } else
                 {
@@ -182,18 +180,22 @@ namespace MacroVSTO
 
             }
         }
+
+        // this method adds the actual test to the project
+        // here, the data on the test from xray is transformed into the contents of an MS Project Task
         public void AddTest(JToken test, String testExecKey)
         {
             MSProject.Task newTask = application.ActiveProject.Tasks.Add(test["testIssueFields"]["summary"]);
 
+            // this sets the basic fields, that every test hast
             newTask.Start = test["testIssueFields"]["customfield_10128"].ToString();
             newTask.Finish = test["testIssueFields"]["customfield_10129"].ToString();
             newTask.Text19 = test["testKey"].ToString();
             newTask.Text20 = testExecKey;
 
-
-            //newTask.Text10 = test["testIssueFields"][textToField["text10"]].ToString();
-            //newTask.Text11 = test["testIssueFields"][textToField["text11"]].ToString();
+            // this sets the custom fields, that were configured and translated to the texttofield dictionary
+            newTask.Text10 = test["testIssueFields"][textToField["text10"]].ToString();
+            newTask.Text11 = test["testIssueFields"][textToField["text11"]].ToString();
 
             if (test["assignee"] == null)
                 {
@@ -220,6 +222,7 @@ namespace MacroVSTO
 
         }
 
+        // this method fetches the key of all test executions and imports all of them
         public async void ImportAllTestExecutions()
         {
             try
@@ -243,8 +246,6 @@ namespace MacroVSTO
                 MessageBox.Show("An exception occured. This might mean that Jira is unavailable");
                 return;
             }
-
-            scanProject();
         }
     }
 }
