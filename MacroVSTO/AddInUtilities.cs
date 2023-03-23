@@ -18,8 +18,9 @@ namespace MacroVSTO
     {
         void ReimportTestExecution(String key);
         void ImportTestExecution(String key);
+        void ImportTestPlan(String key);
         void ImportAllTestExecutions();
-        void WriteToTextToPlain(String text10, String text11);
+        void WriteToTextToPlain(string text10In, string text11In, string text12In, string text13In, string text14In, string text15In);
     }
 
 
@@ -73,16 +74,24 @@ namespace MacroVSTO
 
         // in order to get the mapping from text field to custom field, all possible custom fields and their corresponding id are stored int plaintofield.json
         // using the texttoplain.json file, the mapping from text field to custom field id can be created
-        public void WriteToTextToPlain(string text10In, string text11In)
+        public void WriteToTextToPlain(string text10In, string text11In, string text12In, string text13In, string text14In, string text15In)
         {
             string text10 = text10In.ToLower().Trim().Replace(" ", "");
             string text11 = text11In.ToLower().Trim().Replace(" ", "");
+            string text12 = text11In.ToLower().Trim().Replace(" ", "");
+            string text13 = text11In.ToLower().Trim().Replace(" ", "");
+            string text14 = text11In.ToLower().Trim().Replace(" ", "");
+            string text15 = text11In.ToLower().Trim().Replace(" ", "");
             Dictionary<string, string> textToPlain = new Dictionary<string, string>();
             textToPlain.Add("text10", text10);
             textToPlain.Add("text11", text11);
+            textToPlain.Add("text12", text12);
+            textToPlain.Add("text13", text13);
+            textToPlain.Add("text14", text14);
+            textToPlain.Add("text15", text15);
 
             string jsonString = JsonConvert.SerializeObject(textToPlain);
-            File.WriteAllText("C:\\Users\\anton.scheitler\\source\\repos\\MacroVSTO\\MacroVSTO\\texttoplain.json", jsonString);
+            File.WriteAllText("..\\texttoplain.json", jsonString);
         }
 
         // this method creates the actual mapping from text fields to custom field ids
@@ -90,8 +99,8 @@ namespace MacroVSTO
         // as such, this method has to be called before each http request
         public void updateTextToField()
         {
-            string plainToFieldString = File.ReadAllText("C:\\Users\\anton.scheitler\\source\\repos\\MacroVSTO\\MacroVSTO\\plaintofield.json");
-            string textToPlainString = File.ReadAllText("C:\\Users\\anton.scheitler\\source\\repos\\MacroVSTO\\MacroVSTO\\texttoplain.json");
+            string plainToFieldString = File.ReadAllText("..\\plaintofield.json");
+            string textToPlainString = File.ReadAllText("..\\texttoplain.json");
             var plainToField = JsonConvert.DeserializeObject<Dictionary<string, string>>(plainToFieldString);
             var textToPlain = JsonConvert.DeserializeObject<Dictionary<string, string>>(textToPlainString);
 
@@ -196,6 +205,10 @@ namespace MacroVSTO
             // this sets the custom fields, that were configured and translated to the texttofield dictionary
             newTask.Text10 = test["testIssueFields"][textToField["text10"]].ToString();
             newTask.Text11 = test["testIssueFields"][textToField["text11"]].ToString();
+            newTask.Text12 = test["testIssueFields"][textToField["text12"]].ToString();
+            newTask.Text13 = test["testIssueFields"][textToField["text13"]].ToString();
+            newTask.Text14 = test["testIssueFields"][textToField["text14"]].ToString();
+            newTask.Text15 = test["testIssueFields"][textToField["text15"]].ToString();
 
             if (test["assignee"] == null)
                 {
@@ -247,8 +260,42 @@ namespace MacroVSTO
                 return;
             }
         }
+
+        // this method fetches all tests related to a test plan and then adds those tests to the project
+        public async void ImportTestPlan(string key)
+        {
+            key = key.ToUpper();
+            updateTextToField();
+            parameters.Remove("testExecKey");
+            parameters.Add("testPlanKey", key);
+            client.DefaultRequestHeaders.Add("Authorization", token);
+            string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
+
+            var task = client.GetStringAsync(uri);
+            String testPlanString = task.GetAwaiter().GetResult();
+
+            client.DefaultRequestHeaders.Remove("Authorization");
+            parameters.Remove("testPlanKey");
+            parameters.Add("testExecKey", "");
+            var testPlan = JArray.Parse(testPlanString);
+
+            foreach (var test in testPlan)
+            {
+                AddTest(test, key);
+            }
+        }
     }
 }
+
+                //key = key.ToUpper();
+                //updateTextToField();
+                //parameters["testExecKey"] = key;
+                //string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
+                //client.DefaultRequestHeaders.Add("Authorization", token);
+                //var task = client.GetStringAsync(uri);
+                //String jsonString = task.GetAwaiter().GetResult();
+                //client.DefaultRequestHeaders.Remove("Authorization");
+                //var jsonArray = JArray.Parse(jsonString);
 
 //Sub ReimportTestExecution()
 //    Dim addIn As COMAddIn
