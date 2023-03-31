@@ -17,6 +17,7 @@ namespace MacroVSTO
     public interface IAddInUtilities
     {
         void ReimportTestExecution(String key);
+        void ReimportTestPlan(String key);
         void ImportTestExecution(String key);
         void ImportTestPlan(String key);
         void ImportAllTestExecutions();
@@ -28,7 +29,7 @@ namespace MacroVSTO
     [ClassInterface(ClassInterfaceType.None)]
     public class AddInUtilities : IAddInUtilities
     {
-        
+
         // this is a dictionary containing the mapping from the text field of a task to the desired custom field id
         Dictionary<string, string> textToField = new Dictionary<string, string>();
 
@@ -50,7 +51,7 @@ namespace MacroVSTO
         // this method goes through every task in the project and updates the tests directory accordingly
         public Dictionary<string, Dictionary<string, int>> scanProject()
         {
-            
+
             Dictionary<string, Dictionary<string, int>> content = new Dictionary<string, Dictionary<string, int>>();
             foreach (MSProject.Task task in application.ActiveProject.Tasks)
             {
@@ -122,35 +123,34 @@ namespace MacroVSTO
         {
             //try
             //{
-                key = key.ToUpper();
-                updateTextToField();
-                parameters["testExecKey"] = key;
-                string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
-                client.DefaultRequestHeaders.Add("Authorization", token);
-                var task = client.GetStringAsync(uri);
-                String jsonString = task.GetAwaiter().GetResult();
-                client.DefaultRequestHeaders.Remove("Authorization");
-                var jsonArray = JArray.Parse(jsonString);
+            key = key.ToUpper();
+            updateTextToField();
+            parameters["testExecKey"] = key;
+            string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
+            client.DefaultRequestHeaders.Add("Authorization", token);
+            var task = client.GetStringAsync(uri);
+            String jsonString = task.GetAwaiter().GetResult();
+            client.DefaultRequestHeaders.Remove("Authorization");
+            var jsonArray = JArray.Parse(jsonString);
 
-                foreach (var test in jsonArray)
-                {
-                    AddTest(test, key); // this method call adds the actual test to the project, all the other stuff can probably be refactored away (and should be)
-                }
-        //}
-        //    catch
-        //    {
-        //        MessageBox.Show("There's connection issues with Jira or the specified TestExecution does not exist");
-        //        return;
-        //    }
+            foreach (var test in jsonArray)
+            {
+                AddTest(test, key); // this method call adds the actual test to the project, all the other stuff can probably be refactored away (and should be)
+            }
+            //}
+            //    catch
+            //    {
+            //        MessageBox.Show("There's connection issues with Jira or the specified TestExecution does not exist");
+            //        return;
+            //    }
 
-}
+        }
 
-        // this method fetches data on a test execution and compares it to the existing representation of that test execution in the project
+        // this method fetches data on either a test execution or a test plan and compares it to the existing representation of that test execution or plan in the project
         // if they don't match, the extra tests are added to the project
         // however, tests cannot be removed from this
-        public void ReimportTestExecution(String key)
+        public void Reimport(String key)
         {
-            application.SelectRow(1, false);
             if (key == null)
             {
                 return;
@@ -160,13 +160,12 @@ namespace MacroVSTO
             updateTextToField();
             if (!tests.ContainsKey(key))
             {
-                MessageBox.Show("Test Execution has not been imported\nThus it cannot be reimported");
+                MessageBox.Show("Test Plan or Execution has not been imported\nThus it cannot be reimported");
                 return;
             }
 
             Dictionary<string, int> testExecCopy = tests[key];
 
-            parameters["testExecKey"] = key;
             string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
             client.DefaultRequestHeaders.Add("Authorization", token);
             var task = client.GetStringAsync(uri);
@@ -179,15 +178,34 @@ namespace MacroVSTO
                 {
                     testExecCopy[test["testKey"].ToString()] = 0;
                     AddTest(test, key);
-                } else if (testExecCopy[test["testKey"].ToString()] == 0)
+                }
+                else if (testExecCopy[test["testKey"].ToString()] == 0)
                 {
                     AddTest(test, key);
-                } else
+                }
+                else
                 {
                     testExecCopy[test["testKey"].ToString()] = testExecCopy[test["testKey"].ToString()] - 1;
                 }
 
             }
+        }
+
+        // uses the Reimport utility function to reimport the given test execution
+        public void ReimportTestExecution(string key)
+        {
+            parameters["testExecKey"] = key.ToUpper();
+            Reimport(key);
+        }
+
+        // uses the Reimport utility function to reimport the given test plan
+        public void ReimportTestPlan(string key)
+        {
+            parameters.Remove("testExecKey");
+            parameters.Add("testPlanKey", key.ToUpper());
+            Reimport(key);
+            parameters.Remove("testPlanKey");
+            parameters.Add("testExecKey", "");
         }
 
         // this method adds the actual test to the project
@@ -211,27 +229,27 @@ namespace MacroVSTO
             newTask.Text15 = test["testIssueFields"][textToField["text15"]].ToString();
 
             if (test["assignee"] == null)
-                {
-                    newTask.ResourceNames = "Herbert";
-                }
-                else
-                {
-                    newTask.ResourceNames = test["assignee"].ToString();
-                }
+            {
+                newTask.ResourceNames = "Herbert";
+            }
+            else
+            {
+                newTask.ResourceNames = test["assignee"].ToString();
+            }
 
-                application.SelectRow(newTask.ID, false);
-                switch (test["status"].ToString())
-                {
-                    case "PASS":
-                        application.GanttBarFormat(StartColor: PjColor.pjLime, MiddleColor: PjColor.pjLime, EndColor: PjColor.pjLime);
-                        break;
-                    case "EXECUTING":
-                        application.GanttBarFormat(StartColor: PjColor.pjYellow, MiddleColor: PjColor.pjYellow, EndColor: PjColor.pjYellow);
-                        break;
-                    case "FAIL":
-                        application.GanttBarFormat(StartColor: PjColor.pjRed, MiddleColor: PjColor.pjRed, EndColor: PjColor.pjRed);
-                        break;
-                }
+            application.SelectRow(newTask.ID, false);
+            switch (test["status"].ToString())
+            {
+                case "PASS":
+                    application.GanttBarFormat(StartColor: PjColor.pjLime, MiddleColor: PjColor.pjLime, EndColor: PjColor.pjLime);
+                    break;
+                case "EXECUTING":
+                    application.GanttBarFormat(StartColor: PjColor.pjYellow, MiddleColor: PjColor.pjYellow, EndColor: PjColor.pjYellow);
+                    break;
+                case "FAIL":
+                    application.GanttBarFormat(StartColor: PjColor.pjRed, MiddleColor: PjColor.pjRed, EndColor: PjColor.pjRed);
+                    break;
+            }
 
         }
 
@@ -253,7 +271,7 @@ namespace MacroVSTO
                         ImportTestExecution(testExecution["key"].ToString());
                     }
                 }
-            } 
+            }
             catch
             {
                 MessageBox.Show("An exception occured. This might mean that Jira is unavailable");
@@ -286,16 +304,6 @@ namespace MacroVSTO
         }
     }
 }
-
-                //key = key.ToUpper();
-                //updateTextToField();
-                //parameters["testExecKey"] = key;
-                //string uri = QueryHelpers.AddQueryString("raven/2.0/api/testruns", parameters);
-                //client.DefaultRequestHeaders.Add("Authorization", token);
-                //var task = client.GetStringAsync(uri);
-                //String jsonString = task.GetAwaiter().GetResult();
-                //client.DefaultRequestHeaders.Remove("Authorization");
-                //var jsonArray = JArray.Parse(jsonString);
 
 //Sub ReimportTestExecution()
 //    Dim addIn As COMAddIn
