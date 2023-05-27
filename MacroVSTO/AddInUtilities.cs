@@ -33,16 +33,21 @@ namespace MacroVSTO
         // this is a dictionary containing the mapping from the text field of a task to the desired custom field id
         Dictionary<string, string> textToField = new Dictionary<string, string>();
 
+        // ADD OWN TOKEN HERE
         string token = "Bearer OTY3MDY3MzE3OTQ1OghfelOUY/pXavz/Mfos0VSIZe5f";
 
         HttpClient client = new HttpClient()
         {
+            // ADD OWN URL HERE
             BaseAddress = new Uri("http://localhost:8080/rest/"),
         };
 
+        // includeTestFields specifies the fields that need to be imported for every test
+        // right now, it only imports start and end date
         Dictionary<string, string> parameters = new Dictionary<string, string>()
         {
             ["testExecKey"] = "",
+            // ADD ADDITIONAL FIELDS HERE
             ["includeTestFields"] = "customfield_10128,customfield_10129,summary"
         };
 
@@ -121,6 +126,10 @@ namespace MacroVSTO
         // imports a single test execution
         public async void ImportTestExecution(String key)
         {
+            if (key == null)
+            {
+                return;
+            }
             //try
             //{
             key = key.ToUpper();
@@ -135,7 +144,7 @@ namespace MacroVSTO
 
             foreach (var test in jsonArray)
             {
-                AddTest(test, key); // this method call adds the actual test to the project, all the other stuff can probably be refactored away (and should be)
+                AddTest(test, key); // this method call adds the actual test to the project
             }
             //}
             //    catch
@@ -194,6 +203,10 @@ namespace MacroVSTO
         // uses the Reimport utility function to reimport the given test execution
         public void ReimportTestExecution(string key)
         {
+            if (key == null)
+            {
+                return;
+            }
             parameters["testExecKey"] = key.ToUpper();
             Reimport(key);
         }
@@ -201,6 +214,10 @@ namespace MacroVSTO
         // uses the Reimport utility function to reimport the given test plan
         public void ReimportTestPlan(string key)
         {
+            if (key == null)
+            {
+                return;
+            }
             parameters.Remove("testExecKey");
             parameters.Add("testPlanKey", key.ToUpper());
             Reimport(key);
@@ -214,7 +231,7 @@ namespace MacroVSTO
         {
             MSProject.Task newTask = application.ActiveProject.Tasks.Add(test["testIssueFields"]["summary"]);
 
-            // this sets the basic fields, that every test hast
+            // this sets the basic fields, that every test has
             newTask.Start = test["testIssueFields"]["customfield_10128"].ToString();
             newTask.Finish = test["testIssueFields"]["customfield_10129"].ToString();
             newTask.Text19 = test["testKey"].ToString();
@@ -282,6 +299,10 @@ namespace MacroVSTO
         // this method fetches all tests related to a test plan and then adds those tests to the project
         public async void ImportTestPlan(string key)
         {
+            if (key == null)
+            {
+                return;
+            }
             key = key.ToUpper();
             updateTextToField();
             parameters.Remove("testExecKey");
