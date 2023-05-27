@@ -17,7 +17,7 @@ namespace MacroVSTO
     public interface IAddInUtilities
     {
         void ReimportTestExecution(String key);
-        void ReimportTestPlan(String key)t;
+        void ReimportTestPlan(String key);
         void ImportTestExecution(String key);
         void ImportTestPlan(String key);
         void ImportAllTestExecutions();
